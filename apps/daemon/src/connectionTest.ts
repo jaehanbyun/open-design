@@ -16,6 +16,7 @@
 // `/api/proxy/*/stream` routes; both paths share the base URL policy from
 // contracts so Settings and daemon-side checks reject the same hosts.
 
+import { resolveAgentReasoning } from './runtimes/detection.js';
 import { spawn } from 'node:child_process';
 import { promises as dnsPromises } from 'node:dns';
 import { promises as fsp } from 'node:fs';
@@ -1193,6 +1194,16 @@ async function testAgentConnectionInternal(
     validateAgentCliEnv(input.agentCliEnv),
     input.agentId,
   );
+  let reasoning: string | null;
+  try {
+    reasoning = await resolveAgentReasoning(def, model, input.reasoning, configuredAgentEnv);
+  } catch (err) {
+    return {
+      ok: false, kind: 'invalid_reasoning', latencyMs: Date.now() - start,
+      model, agentName: def.name,
+      detail: err instanceof Error ? err.message : String(err),
+    };
+  }
   const executableResolution = resolveAgentLaunch(def, configuredAgentEnv);
   const resolvedBin = executableResolution.selectedPath;
   if (!resolvedBin || !executableResolution.launchPath) {
@@ -1363,7 +1374,7 @@ async function testAgentConnectionInternal(
         SMOKE_PROMPT,
         [],
         [],
-        { model: input.model ?? null, reasoning: input.reasoning ?? null },
+        { model: input.model ?? null, reasoning },
         { cwd: tempDir },
       );
     } catch (err) {

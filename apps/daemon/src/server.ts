@@ -283,6 +283,7 @@ import {
   setToken,
 } from './mcp-tokens.js';
 import { agentCliEnvForAgent, readAppConfig, readPluginEnvKnobs, writeAppConfig } from './app-config.js';
+import { resolveAgentReasoning } from './runtimes/detection.js';
 import { OrbitService, formatLocalProjectTimestamp, renderOrbitTemplateSystemPrompt } from './orbit.js';
 import { buildOrbitNoLiveArtifactSummary } from './orbit-agent-summary.js';
 import {
@@ -10049,6 +10050,28 @@ export async function startServer({
       );
     if (!def.bin)
       return design.runs.fail(run, 'AGENT_UNAVAILABLE', 'agent has no binary');
+    let configuredAgentEnv = {};
+    try {
+      const appConfig = await readAppConfig(RUNTIME_DATA_DIR);
+      configuredAgentEnv = agentCliEnvForAgent(appConfig.agentCliEnv, def.id);
+    } catch {
+      configuredAgentEnv = {};
+    }
+    // Per-agent model + reasoning the user picked in the model menu.
+    // Trust the value when it matches the most recent /api/agents listing
+    // (live or fallback). Otherwise allow it through if it passes a
+    // permissive sanitizer — that's the path for user-typed custom model
+    // ids the CLI's listing didn't surface yet.
+    const safeModel = typeof model === 'string'
+      ? (isKnownModel(def, model) ? model : sanitizeCustomModel(model)) : null;
+    let safeReasoning;
+    try {
+      safeReasoning = await resolveAgentReasoning(def, safeModel, reasoning, configuredAgentEnv);
+    } catch (err) {
+      return design.runs.fail(run, 'BAD_REQUEST', err instanceof Error ? err.message : String(err));
+    }
+    run.reasoning = safeReasoning;
+
     const safeCommentAttachments =
       normalizeCommentAttachments(commentAttachments);
     if (
@@ -10382,21 +10405,6 @@ export async function startServer({
         ? `\n\n${safeImages.map((p) => `@${p}`).join(' ')}`
         : '',
     ].join('');
-    // Per-agent model + reasoning the user picked in the model menu.
-    // Trust the value when it matches the most recent /api/agents listing
-    // (live or fallback). Otherwise allow it through if it passes a
-    // permissive sanitizer — that's the path for user-typed custom model
-    // ids the CLI's listing didn't surface yet.
-    const safeModel =
-      typeof model === 'string'
-        ? isKnownModel(def, model)
-          ? model
-          : sanitizeCustomModel(model)
-        : null;
-    const safeReasoning =
-      typeof reasoning === 'string' && Array.isArray(def.reasoningOptions)
-        ? (def.reasoningOptions.find((r) => r.id === reasoning)?.id ?? null)
-        : null;
     const agentOptions = { model: safeModel, reasoning: safeReasoning };
     const mcpServers = buildLiveArtifactsMcpServersForAgent(def, {
       enabled: Boolean(toolTokenGrant?.token),
@@ -10535,14 +10543,6 @@ export async function startServer({
         ),
       );
       return design.runs.finish(run, 'failed', 1, null);
-    }
-
-    let configuredAgentEnv = {};
-    try {
-      const appConfig = await readAppConfig(RUNTIME_DATA_DIR);
-      configuredAgentEnv = agentCliEnvForAgent(appConfig.agentCliEnv, def.id);
-    } catch {
-      configuredAgentEnv = {};
     }
 
     const agentLaunch = resolveAgentLaunch(def, configuredAgentEnv);

@@ -5,11 +5,17 @@ export type RuntimeEnv = NodeJS.ProcessEnv | Record<string, string>;
 export type RuntimeModelOption = {
   id: string;
   label: string;
+  reasoningOptions?: RuntimeReasoningOption[];
+  defaultReasoning?: string;
 };
 
 export type RuntimeModelSource = 'live' | 'fallback';
 
-export type RuntimeReasoningOption = RuntimeModelOption;
+export type RuntimeReasoningOption = {
+  id: string;
+  label: string;
+  description?: string;
+};
 
 export type RuntimeBuildOptions = {
   model?: string | null;

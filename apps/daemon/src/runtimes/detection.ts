@@ -6,6 +6,7 @@ import { spawnEnvForAgent } from './env.js';
 import { probeAgentAuthStatus } from './auth.js';
 import { agentCapabilities } from './capabilities.js';
 import { installMetaForAgent } from './metadata.js';
+import { validateModelReasoning } from './reasoning.js';
 import type {
   DetectedAgent,
   RuntimeAgentDef,
@@ -18,6 +19,29 @@ type FetchedRuntimeModels = {
   models: RuntimeModelOption[];
   source: RuntimeModelSource;
 };
+
+/** Resolve efforts against the same configured executable/environment as the run.
+ * A caller need not visit /api/agents first; no other runtime is probed here.
+ */
+export async function resolveAgentReasoning(
+  def: RuntimeAgentDef,
+  model: string | null | undefined,
+  reasoning: unknown,
+  configuredEnv: Record<string, string> = {},
+): Promise<string | null> {
+  if (reasoning == null || reasoning === '' || reasoning === 'default') return null;
+  let models = def.fallbackModels ?? [];
+  if (def.listModels || def.fetchModels) {
+    const launch = resolveAgentLaunch(def, configuredEnv);
+    if (launch.launchPath) {
+      const env = applyAgentLaunchEnv(
+        spawnEnvForAgent(def.id, { ...process.env, ...def.env }, configuredEnv), launch,
+      );
+      models = (await fetchModels(def, launch.launchPath, env)).models;
+    }
+  }
+  return validateModelReasoning(def, models, model, reasoning);
+}
 
 async function fetchModels(
   def: RuntimeAgentDef,

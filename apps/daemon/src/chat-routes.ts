@@ -374,12 +374,7 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
               detail: 'Invalid custom model id. Use a model id that starts with a letter or number and contains no spaces.',
             });
           }
-          const safeReasoning =
-            def &&
-            typeof body.reasoning === 'string' &&
-            Array.isArray(def.reasoningOptions)
-              ? (def.reasoningOptions.find((r: any) => r.id === body.reasoning)?.id ?? undefined)
-              : undefined;
+          const safeReasoning = typeof body.reasoning === 'string' ? body.reasoning : undefined;
           const result = await testAgentConnection({
             agentId: body.agentId,
             model: safeModel ?? undefined,
