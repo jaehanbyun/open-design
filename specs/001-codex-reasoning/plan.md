@@ -24,13 +24,13 @@ fallback semantics. Avoid introducing a second persistent catalogue or auth cach
 No per-render network request. Resolve capabilities once per explicit run/test
 reasoning selection so execution does not depend on a prior UI visit.
 
-Validate before prompt preparation/spawn and return BAD_REQUEST for unsupported
+Validate at the existing model-resolution boundary before agent spawn and return BAD_REQUEST for unsupported
 known-model reasoning. Connection tests return invalid_reasoning. Fallback paths
 retain existing unknown-value handling and the defensive Codex clamp.
 
-Add shared run request types, --reasoning and --prompt-file to od run start/redesign,
-and thin MCP HTTP proxies. Reconcile preferences at both UI model selection and
-catalogue refresh. Use existing translated labels, native selects, and styles.
+Extend the existing McpRunCreateRequest, od run start/redesign --reasoning, and
+MCP start_run schema. Preserve existing prompt-file, workspace and retry handling. Reconcile preferences at both UI model selection and
+catalogue refresh. Use existing translated labels, native reasoning selects, existing searchable model controls, and styles.
 
 ## Validation
 

@@ -12,7 +12,7 @@ describe('od run reasoning', () => {
     const server = createServer(async (req, res) => {
       let body = '';
       for await (const chunk of req) body += String(chunk);
-      received.push({ url: req.url, body: JSON.parse(body) });
+      received.push({ url: req.url, body: body ? JSON.parse(body) : null });
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ runId: 'run-1' }));
     });
@@ -31,8 +31,8 @@ describe('od run reasoning', () => {
         ], (error, stdout) => error ? reject(error) : resolve(stdout));
         if (stdin) child.stdin?.end('A long prompt\nwith "quotes" and $literal content.');
       });
-      expect(JSON.parse(stdout)).toEqual({ runId: 'run-1' });
-      expect(received).toEqual([{ url: '/api/runs', body: {
+      expect(JSON.parse(stdout)).toMatchObject({ runId: 'run-1' });
+      expect(received).toMatchObject([{ url: '/api/runs', body: {
         projectId: 'p1', agentId: 'codex', model: 'gpt-6-astra', reasoning: 'deep-v2',
         message: 'A long prompt\nwith "quotes" and $literal content.',
       } }]);

@@ -62,7 +62,7 @@ describe('renderMarkdown', () => {
     expect(out).toContain('>here</a>');
   });
 
-  it('marks bare URLs with the bare-link class so CSS can break them mid-string', () => {
+  it('marks bare URLs with the bare-link class so CSS can apply URL-specific wrapping', () => {
     const out = html('See https://example.com/very/long/path?with=long&query=string');
     expect(out).toContain('md-link-bare');
   });
@@ -129,12 +129,37 @@ describe('renderMarkdown', () => {
     expect(out).toContain('<code class="md-inline-code">https://example.com/x</code>');
   });
 
+  it('renders color swatches for valid hex tokens inside inline code spans', () => {
+    const out = html('Palette: `#475569`, `#fff`, `#ffff`, `#11223344`, and `npm install`.');
+
+    expect(out).toContain('<code class="md-inline-code md-color-token">');
+    expect(out).toContain('style="background-color:#475569"');
+    expect(out).toContain('style="background-color:#fff"');
+    expect(out).toContain('style="background-color:#ffff"');
+    expect(out).toContain('style="background-color:#11223344"');
+    expect(out).toContain('<code class="md-inline-code">npm install</code>');
+    expect(out.match(/class="md-color-swatch"/g)?.length).toBe(4);
+  });
+
+  it('renders prose color swatches only for 6 and 8 digit hex values', () => {
+    const out = html('Use #475569, #11223344, #1672, and #498 in the notes.');
+
+    expect(out).toContain('style="background-color:#475569"');
+    expect(out).toContain('style="background-color:#11223344"');
+    expect(out).not.toContain('style="background-color:#1672"');
+    expect(out).not.toContain('style="background-color:#498"');
+    expect(out).toContain('#1672');
+    expect(out).toContain('#498');
+    expect(out.match(/class="md-color-swatch"/g)?.length).toBe(2);
+  });
+
   it('adds copy controls to fenced code blocks', () => {
     const out = html('```tsx\nexport const ok = true;\n```');
     expect(out).toContain('class="md-code-block"');
+    expect(out).toContain('class="md-code-header"');
     expect(out).toContain('class="md-code-actions"');
     expect(out).toContain('class="md-code-action"');
-    expect(out).toContain('>Copy</button>');
+    expect(out).toContain('<span>Copy</span>');
     expect(out).toContain('export const ok = true;');
   });
 

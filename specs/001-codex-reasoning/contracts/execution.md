@@ -6,7 +6,7 @@
   existing asynchronous status/events contract.
 - POST /api/test/connection uses the same validation and reports invalid_reasoning.
 - od run start / redesign --project ID --agent codex --model ID --reasoning ID
-  --prompt-file path|- --json posts to /api/runs. Redesign starts another normal
-  iteration in the supplied existing project.
-- MCP list_agents returns /api/agents; start_run resolves project context and posts
+  --prompt-file path|- --json posts to /api/runs. Redesign retains the upstream
+  redesign skill and folder-import behavior.
+- MCP list_agents preserves capability metadata from /api/agents; start_run resolves project context and posts
   the shared request to /api/runs. Neither bypasses daemon validation.

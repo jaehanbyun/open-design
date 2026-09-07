@@ -39,3 +39,13 @@ describe.each(['inline', 'avatar'] as const)('%s reasoning picker', (surface) =>
     expect(change).toHaveBeenCalledWith('codex', { reasoning: 'deep-v2' });
   });
 });
+
+it('keeps the dormant Local CLI reasoning control out of the BYOK picker', () => {
+  render(<I18nProvider initial="en"><InlineModelSwitcher
+    config={{ ...config, mode: 'api' }} agents={[agent]} daemonLive
+    onModeChange={vi.fn()} onAgentChange={vi.fn()} onAgentModelChange={vi.fn()}
+    onApiProtocolChange={vi.fn()} onApiModelChange={vi.fn()} onOpenSettings={vi.fn()}
+  /></I18nProvider>);
+  fireEvent.click(screen.getByTestId('inline-model-switcher-chip'));
+  expect(screen.queryByTestId('inline-model-switcher-reasoning')).toBeNull();
+});

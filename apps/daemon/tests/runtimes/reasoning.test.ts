@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { codexAgentDef, parseCodexDebugModels } from '../../src/runtimes/defs/codex.js';
+import { mergeFallbackModelMetadata } from '../../src/runtimes/models.js';
 import { validateModelReasoning } from '../../src/runtimes/reasoning.js';
 
 describe('Codex model-owned reasoning', () => {
@@ -14,6 +15,15 @@ describe('Codex model-owned reasoning', () => {
     expect(() => validateModelReasoning(codexAgentDef,
       [{ id: 'empty', label: 'Empty', reasoningOptions: [] }], 'empty', 'low')).toThrow('not supported');
   });
+  it('keeps explicit empty live capabilities authoritative over static hints', () => {
+    const def = { ...codexAgentDef, fallbackModels: [{
+      id: 'empty', label: 'Empty', reasoningOptions: [{ id: 'low', label: 'Low' }],
+    }] };
+    const models = mergeFallbackModelMetadata(def, [{ id: 'empty', label: 'Empty', reasoningOptions: [] }]);
+    expect(models[0]?.reasoningOptions).toEqual([]);
+    expect(() => validateModelReasoning(def, models, 'empty', 'low')).toThrow('not supported');
+  });
+
   it('preserves model-specific defaults and future options in catalogue order', () => {
     const catalogue = [
       ['gpt-5.5', 'medium', ['low', 'medium', 'high', 'xhigh']],

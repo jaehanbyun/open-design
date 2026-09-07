@@ -631,13 +631,13 @@ describe('connector routes', () => {
     });
   });
 
-  it('surfaces nested Composio auth config creation errors', async () => {
+  it('returns custom auth guidance when preparing an unsupported managed Composio auth config', async () => {
     await closeServer();
     mockComposioFetch({
       authConfigs: [],
       createAuthConfigResponse: composioJson({
         error: {
-          message: 'Default auth config not found for toolkit "canvas".',
+          message: 'Default auth config not found for toolkit "twitter". Composio does not have managed credentials for this toolkit.',
           suggested_fix: 'Use type "use_custom_auth" with your own credentials.',
         },
       }, 400),
@@ -652,10 +652,102 @@ describe('connector routes', () => {
       body: JSON.stringify({ apiKey: 'cmp_test' }),
     });
 
-    const connect = await jsonFetch(`${baseUrl}/api/connectors/canvas/connect`, { method: 'POST' });
+    const prepare = await jsonFetch(`${baseUrl}/api/connectors/auth-configs/prepare`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ connectorIds: ['twitter'] }),
+    });
 
-    expect(connect.status).toBe(502);
-    expect(connect.body.error.message).toBe('Default auth config not found for toolkit "canvas".');
+    expect(prepare.status).toBe(200);
+    expect(prepare.body.results.twitter).toEqual({
+      status: 'custom_required',
+      message: 'Twitter requires a custom Composio auth config. Create or enable a Twitter auth config in Composio with your own OAuth credentials, then retry this connection.',
+    });
+  });
+
+  it('rediscovers externally-created Composio auth configs after managed auth is unavailable', async () => {
+    await closeServer();
+    const authConfigs: JsonObject[] = [];
+    mockComposioFetch({
+      authConfigs,
+      createAuthConfigResponse: composioJson({
+        error: {
+          message: 'Default auth config not found for toolkit "twitter". Composio does not have managed credentials for this toolkit.',
+          suggested_fix: 'Use type "use_custom_auth" with your own credentials.',
+        },
+      }, 400),
+      linkResponse: { connected_account_id: 'ca_twitter', status: 'PENDING' },
+    });
+    composioConnectorProvider.clearDiscoveryCache();
+    const started = await startServer({ port: 0, returnServer: true }) as StartedServer;
+    server = started.server;
+    baseUrl = started.url;
+    await jsonFetch(`${baseUrl}/api/connectors/composio/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey: 'cmp_test' }),
+    });
+
+    const firstPrepare = await jsonFetch(`${baseUrl}/api/connectors/auth-configs/prepare`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ connectorIds: ['twitter'] }),
+    });
+    authConfigs.push({ id: 'ac_twitter_custom', status: 'ENABLED', toolkit: { slug: 'twitter' } });
+    const secondPrepare = await jsonFetch(`${baseUrl}/api/connectors/auth-configs/prepare`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ connectorIds: ['twitter'] }),
+    });
+    const connect = await jsonFetch(`${baseUrl}/api/connectors/twitter/connect`, { method: 'POST' });
+
+    expect(firstPrepare.status).toBe(200);
+    expect(firstPrepare.body.results.twitter).toEqual({
+      status: 'custom_required',
+      message: 'Twitter requires a custom Composio auth config. Create or enable a Twitter auth config in Composio with your own OAuth credentials, then retry this connection.',
+    });
+    expect(secondPrepare.status).toBe(200);
+    expect(secondPrepare.body.results.twitter).toEqual({ status: 'ready', authConfigId: 'ac_twitter_custom' });
+    expect(connect.status).toBe(200);
+    expect(connect.body).toMatchObject({ auth: { kind: 'pending', providerConnectionId: 'ca_twitter' } });
+    expect(connect.body.connector).toMatchObject({ id: 'twitter', auth: { configured: true } });
+    expect(readComposioConfig().authConfigIds.twitter).toBe('ac_twitter_custom');
+    expect(lastComposioLinkRequest).toMatchObject({ auth_config_id: 'ac_twitter_custom' });
+    expect(composioDiscoveryRequestCounts).toEqual({ authConfigs: 2, createdAuthConfigs: 1, toolkits: 0, tools: 0 });
+  });
+
+  it('explains when a Composio connector requires a custom auth config', async () => {
+    await closeServer();
+    mockComposioFetch({
+      authConfigs: [],
+      createAuthConfigResponse: composioJson({
+        error: {
+          message: 'Default auth config not found for toolkit "twitter". Composio does not have managed credentials for this toolkit.',
+          suggested_fix: 'Use type "use_custom_auth" with your own credentials.',
+        },
+      }, 400),
+    });
+    composioConnectorProvider.clearDiscoveryCache();
+    const started = await startServer({ port: 0, returnServer: true }) as StartedServer;
+    server = started.server;
+    baseUrl = started.url;
+    await jsonFetch(`${baseUrl}/api/connectors/composio/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey: 'cmp_test' }),
+    });
+
+    const connect = await jsonFetch(`${baseUrl}/api/connectors/twitter/connect`, { method: 'POST' });
+
+    expect(connect.status).toBe(409);
+    expect(connect.body.error.code).toBe('CONNECTOR_AUTH_CONFIG_REQUIRED');
+    expect(connect.body.error.message).toBe('Twitter requires a custom Composio auth config. Create or enable a Twitter auth config in Composio with your own OAuth credentials, then retry this connection.');
+    expect(connect.body.error.details).toMatchObject({
+      connectorId: 'twitter',
+      provider: 'composio',
+      reason: 'managed_auth_unavailable',
+      upstreamMessage: 'Default auth config not found for toolkit "twitter". Composio does not have managed credentials for this toolkit.',
+    });
   });
 
   it('rejects immediate Composio connections when account validation does not match the connector', async () => {
@@ -776,10 +868,10 @@ describe('connector routes', () => {
     expect(response.status).toBe(200);
     expect(html).toContain('<main aria-labelledby="callback-title">');
     expect(html).toContain('GitHub connected');
-    expect(html).toContain('Open Design');
+    expect(html).toContain('OpenDesign');
     expect(html).toContain('open-design:connector-connected');
     expect(html).toContain('function requestClose()');
-    expect(html).toContain('Your browser blocked automatic closing. You can close this tab and return to Open Design.');
+    expect(html).toContain('Your browser blocked automatic closing. You can close this tab and return to OpenDesign.');
     expect(html).not.toContain('<p>Connector connected. You can close this window.</p>');
     expect(readComposioConfig().authConfigIds.github).toBe('ac_github');
 
@@ -906,13 +998,23 @@ describe('connector routes', () => {
             ok: true,
             headers: new Headers({ 'content-type': 'image/png' }),
             arrayBuffer: async () => {
-              await new Promise((resolve) => setTimeout(resolve, 2_100));
-              if (!init?.signal) throw new Error('expected fetch timeout signal');
-              if (init.signal.aborted) {
-                firstBodyReadAborted = true;
-                throw (init.signal.reason ?? new DOMException('Aborted', 'AbortError'));
-              }
-              return Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+              const signal = init?.signal;
+              if (!signal) throw new Error('expected fetch timeout signal');
+              // Reject as soon as the route's AbortSignal fires (2s production
+              // timeout) instead of sleeping past it with a fixed wall clock.
+              // That preserves the cancellation assertion without adding a
+              // guaranteed multi-second wait to every CI run.
+              await new Promise<never>((_, reject) => {
+                const abort = () => {
+                  firstBodyReadAborted = true;
+                  reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
+                };
+                if (signal.aborted) {
+                  abort();
+                  return;
+                }
+                signal.addEventListener('abort', abort, { once: true });
+              });
             },
           } as unknown as Response;
         }
@@ -975,6 +1077,80 @@ describe('connector routes', () => {
     expect(secondResponse.headers.get('content-type')).toBe('image/png');
     expect(Buffer.from(await secondResponse.arrayBuffer())).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
     expect(upstreamRequests).toBe(2);
+  });
+
+  it('cancels the upstream stream when a Composio logo exceeds the cap mid-stream', async () => {
+    let cancelled = false;
+    let signal: AbortSignal | undefined;
+    const slug = 'streaming_oversized_logo';
+    const chunk = new Uint8Array(600 * 1024); // 600 KiB chunks; the cap is 1 MiB
+    mockComposioFetch({
+      logoFetch: async (_parsed, init) => {
+        signal = init?.signal ?? undefined;
+        const stream = new ReadableStream<Uint8Array>({
+          pull(streamController) {
+            // Keep feeding chunks so the running total crosses the cap on the
+            // second read (no content-length, so this takes the streaming path).
+            streamController.enqueue(chunk);
+          },
+          cancel() {
+            cancelled = true;
+          },
+        });
+        return {
+          ok: true,
+          headers: new Headers({ 'content-type': 'image/png' }),
+          body: stream,
+        } as unknown as Response;
+      },
+    });
+
+    const response = await fetch(`${baseUrl}/api/connectors/logos/${slug}?theme=dark`);
+
+    expect(response.status).toBe(404);
+    // the half-read upstream body is both cancelled and aborted, not leaked
+    expect(cancelled).toBe(true);
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('aborts an oversized-Content-Length Composio logo before reading its body', async () => {
+    let signal: AbortSignal | undefined;
+    mockComposioFetch({
+      logoFetch: async (_parsed, init) => {
+        signal = init?.signal ?? undefined;
+        return {
+          ok: true,
+          headers: new Headers({ 'content-type': 'image/png', 'content-length': '1048577' }),
+          body: new ReadableStream<Uint8Array>(),
+        } as unknown as Response;
+      },
+    });
+
+    const response = await fetch(`${baseUrl}/api/connectors/logos/cl_oversized?theme=dark`);
+
+    expect(response.status).toBe(404);
+    // the content-length check rejects it and aborts the connection, not leaks it
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('aborts a non-2xx Composio logo response body', async () => {
+    let signal: AbortSignal | undefined;
+    mockComposioFetch({
+      logoFetch: async (_parsed, init) => {
+        signal = init?.signal ?? undefined;
+        return {
+          ok: false,
+          status: 502,
+          headers: new Headers({ 'content-type': 'text/plain' }),
+          body: new ReadableStream<Uint8Array>(),
+        } as unknown as Response;
+      },
+    });
+
+    const response = await fetch(`${baseUrl}/api/connectors/logos/missing_slug?theme=dark`);
+
+    expect(response.status).toBe(404);
+    expect(signal?.aborted).toBe(true);
   });
 
   it('evicts the least recently used Composio logo cache entry when the cache is full', async () => {

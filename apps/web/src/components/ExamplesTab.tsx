@@ -12,6 +12,7 @@ import { buildSrcdoc } from '../runtime/srcdoc';
 import type { SkillSummary, Surface } from '../types';
 import { Icon } from './Icon';
 import { PreviewModal } from './PreviewModal';
+import { AnimatePresence } from 'motion/react';
 
 type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => string;
 
@@ -355,7 +356,7 @@ export function ExamplesTab({ skills: rawSkills, onUsePrompt }: Props) {
       <div className="examples-toolbar">
         <div className="examples-search">
           <span className="search-icon" aria-hidden>
-            <Icon name="search" size={13} />
+            <Icon name="search" size={14} />
           </span>
           <input
             type="search"
@@ -461,6 +462,7 @@ export function ExamplesTab({ skills: rawSkills, onUsePrompt }: Props) {
           ))}
         </div>
       )}
+      <AnimatePresence>
       {(() => {
         if (!previewSkill) return null;
         const unavailableKind = previewUnavailable[previewSkill.id];
@@ -482,7 +484,7 @@ export function ExamplesTab({ skills: rawSkills, onUsePrompt }: Props) {
                 // it can render a calm "no shipped preview" placeholder
                 // instead of bouncing through the error state. Issue #897.
                 unavailable: unavailableKind
-                  ? { kind: unavailableKind }
+                  ? { kind: unavailableKind, noun: 'skill' }
                   : null,
                 deck: previewSkill.mode === 'deck',
               },
@@ -497,6 +499,7 @@ export function ExamplesTab({ skills: rawSkills, onUsePrompt }: Props) {
           />
         );
       })()}
+      </AnimatePresence>
     </div>
   );
 }
@@ -705,18 +708,6 @@ function ExampleCard({
                       : t('common.exportPdf')}
                   </span>
                 </button>
-                {isDeck ? (
-                  <button
-                    type="button"
-                    className="share-menu-item"
-                    role="menuitem"
-                    title={t('examples.exportPptxLocked')}
-                    disabled
-                  >
-                    <span className="share-menu-icon">📊</span>
-                    <span>{t('examples.exportPptxLocked')}</span>
-                  </button>
-                ) : null}
                 <div className="share-menu-divider" />
                 <button
                   type="button"

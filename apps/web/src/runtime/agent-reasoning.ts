@@ -8,7 +8,7 @@ export function reasoningOptionsForModel(
 ): AgentReasoningOption[] {
   const model = agent?.models?.find((m) => m.id === modelId);
   const options = model?.reasoningOptions ?? agent?.reasoningOptions ?? [];
-  if (model?.reasoningOptions === undefined) return options;
+  if (agent?.id !== 'codex' || model?.reasoningOptions === undefined) return options;
   return [
     agent?.reasoningOptions?.find((r) => r.id === 'default') ?? { id: 'default', label: 'Default' },
     ...options.filter((r) => r.id !== 'default'),
@@ -22,7 +22,7 @@ export function reconcileAgentChoice(
   patch: AgentModelPrefs = {},
 ): AgentModelPrefs {
   const next = { ...previous, ...patch };
-  if (!agent || !next.reasoning || next.reasoning === 'default') return next;
+  if (agent?.id !== 'codex' || !next.reasoning || next.reasoning === 'default') return next;
   const options = reasoningOptionsForModel(agent, next.model ?? agent.models?.[0]?.id);
   return options.some((r) => r.id === next.reasoning)
     ? next : { ...next, reasoning: 'default' };

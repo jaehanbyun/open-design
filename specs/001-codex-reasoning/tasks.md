@@ -15,11 +15,11 @@
 
 - [x] T006 Implement preference reconciliation in apps/web/src/App.tsx and SettingsDialog.tsx.
 - [x] T007 Test/implement shared daemon reasoning validation and selected-runtime discovery.
-- [x] T008 Wire validation into server.ts and chat-routes.ts; extend compatibility clamp.
+- [x] T008 Wire validation into server.ts and routes/chat.ts; extend compatibility clamp.
 
 ## US3 — External execution
 
-- [x] T009 Test/implement od run reasoning, prompt-file and redesign in apps/daemon/src/cli.ts.
+- [x] T009 Test/implement od run reasoning with existing prompt-file and redesign semantics in apps/daemon/src/cli.ts.
 - [x] T010 Test/implement MCP capability discovery and run forwarding in apps/daemon/src/mcp.ts.
 
 ## Validation and closure

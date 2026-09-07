@@ -58,11 +58,11 @@ New reasoning IDs remain strings, not a hardcoded ranking. Default is delegation
 not a forced copy of the advertised default (user CLI configuration may override it).
 Explicit API errors and automatic UI preference repair serve different purposes.
 
-This checkout has `od run start` and POST /api/runs, but no redesign subcommand or
-MCP run tools. `od run redesign` will be a documented alias for starting another run
-in an existing project, preserving the normal iteration semantics. MCP gains
-`list_agents` and `start_run` against existing HTTP endpoints. No separate generation
-engine, authentication flow, or model/service-tier substitution is introduced.
+The upstream target already provides `od run start`, `od run redesign`, MCP
+`list_agents`/`start_run`, and model-owned service tiers. Extend those surfaces
+without replacing their workspace scoping, redesign, or idempotency semantics.
+Codex gets fresh configured-executable discovery for explicit reasoning; other
+runtimes retain their existing model-cache scopes and picker defaults.
 
 ## Key entities
 

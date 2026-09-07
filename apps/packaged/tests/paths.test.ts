@@ -16,6 +16,7 @@ function stubPlatform(value: NodeJS.Platform): () => void {
 
 function fakeConfig(): PackagedConfig {
   return {
+    amrProfile: null,
     appVersion: null,
     daemonCliEntry: null,
     daemonSidecarEntry: null,
@@ -26,6 +27,8 @@ function fakeConfig(): PackagedConfig {
     posthogKey: null,
     resourceRoot: join("C:", "Program Files", "Open Design", "resources", "open-design"),
     telemetryRelayUrl: null,
+    updateMetadataUrl: null,
+    velaWebUrl: null,
     webOutputMode: "server",
     webSidecarEntry: null,
     webStandaloneRoot: null,
@@ -55,6 +58,7 @@ describe("resolvePackagedNamespacePaths", () => {
 
   it("rejects namespace overrides that would escape the namespace base root", () => {
     const config: PackagedConfig = {
+      amrProfile: null,
       appVersion: "1.2.3",
       daemonCliEntry: null,
       daemonSidecarEntry: null,
@@ -63,8 +67,10 @@ describe("resolvePackagedNamespacePaths", () => {
       nodeCommand: null,
       resourceRoot: "/tmp/open-design-packaged/resources",
       telemetryRelayUrl: null,
+      updateMetadataUrl: null,
       posthogKey: null,
       posthogHost: null,
+      velaWebUrl: null,
       webSidecarEntry: null,
       webStandaloneRoot: null,
       webOutputMode: "server",

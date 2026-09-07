@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatComposer } from '../../src/components/ChatComposer';
+import { composerText, flushMounts, pressEnter, typeAndSettle } from '../helpers/lexical-composer';
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -62,16 +63,18 @@ describe('ChatComposer infinite re-render regression (#2097)', () => {
     expect(screen.queryByTestId('chat-send')).toBeNull();
   });
 
-  it('keeps send available while streaming so the next prompt can queue', () => {
+  it('keeps send available while streaming so the next prompt can queue', async () => {
     const onSend = vi.fn();
     const onStop = vi.fn();
     renderComposer({ streaming: true, onSend, onStop });
+    await flushMounts();
 
-    const textarea = screen.getByTestId('chat-composer-input') as HTMLTextAreaElement;
-    fireEvent.change(textarea, {
-      target: { value: 'change the font', selectionStart: 'change the font'.length },
-    });
+    typeAndSettle('change the font');
 
+    // The editor's onChange → setDraft settles a tick after typeAndSettle
+    // returns; wait for the send button (which only shows once the composer has
+    // payload) before asserting Stop is gone.
+    await waitFor(() => expect(screen.getByTestId('chat-send')).toBeTruthy());
     expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
     fireEvent.click(screen.getByTestId('chat-send'));
 
@@ -79,16 +82,15 @@ describe('ChatComposer infinite re-render regression (#2097)', () => {
     expect(onSend).toHaveBeenCalledWith('change the font', [], [], undefined);
   });
 
-  it('restores a saved draft for the active conversation', () => {
+  it('restores a saved draft for the active conversation', async () => {
     window.localStorage.setItem('od:chat-composer:draft:project-1:conv-1', 'draft before refresh');
 
     renderComposer({
       draftStorageKey: 'od:chat-composer:draft:project-1:conv-1',
     });
+    await flushMounts();
 
-    expect((screen.getByTestId('chat-composer-input') as HTMLTextAreaElement).value).toBe(
-      'draft before refresh',
-    );
+    await waitFor(() => expect(composerText()).toBe('draft before refresh'));
   });
 
   it('clears the saved draft after submitting it', async () => {
@@ -98,50 +100,82 @@ describe('ChatComposer infinite re-render regression (#2097)', () => {
       draftStorageKey: key,
       onSend,
     });
-    const textarea = screen.getByTestId('chat-composer-input') as HTMLTextAreaElement;
-    fireEvent.change(textarea, {
-      target: { value: 'send then clear', selectionStart: 15, selectionEnd: 15 },
-    });
+    await flushMounts();
+
+    typeAndSettle('send then clear');
 
     await waitFor(() => expect(window.localStorage.getItem(key)).toBe('send then clear'));
-    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
+    pressEnter({ meta: true });
 
     await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(window.localStorage.getItem(key)).toBeNull());
   });
-  it('does not re-sync the composer scroll offset on every plain-text keystroke', () => {
-    const scrollTopGetter = vi.fn(() => 0);
-    const original = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'scrollTop');
-    Object.defineProperty(HTMLTextAreaElement.prototype, 'scrollTop', {
-      configurable: true,
-      get: scrollTopGetter,
-      set() {},
-    });
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
+  it('keeps the original draft while Send is paused and when the decision is canceled', async () => {
+    let resolveDecision!: (outcome: 'restore-draft') => void;
+    const onSend = vi.fn(() => new Promise<'restore-draft'>((resolve) => {
+      resolveDecision = resolve;
+    }));
+    renderComposer({ onSend });
+    await flushMounts();
+
+    typeAndSettle('keep this exact prompt');
+    await waitFor(() => expect(screen.getByTestId('chat-send')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('chat-send'));
+
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(composerText()).toBe('keep this exact prompt');
+
+    await act(async () => resolveDecision('restore-draft'));
+    expect(composerText()).toBe('keep this exact prompt');
+  });
+
+  it('accepts only one submit while the current send decision is pending', async () => {
+    let resolveFirstSend!: () => void;
+    const firstSend = new Promise<void>((resolve) => {
+      resolveFirstSend = resolve;
+    });
+    const onSend = vi.fn()
+      .mockReturnValueOnce(firstSend)
+      .mockResolvedValueOnce(undefined);
+    renderComposer({ onSend });
+    await flushMounts();
+
+    await typeAndSettle('send this once');
+    pressEnter();
+    pressEnter();
+
+    expect(onSend).toHaveBeenCalledTimes(1);
+
+    await act(async () => resolveFirstSend());
+    await waitFor(() => expect(composerText().trim()).toBe(''));
+
+    await typeAndSettle('send a later turn');
+    pressEnter();
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(2));
+  });
+
+  it('does not enter an infinite update loop on rapid plain-text typing', async () => {
+    // #2097 surfaced as "Maximum update depth exceeded" from a feedback loop
+    // between the input and a layout effect. The Lexical editor owns its own
+    // text now (no overlay scroll-sync effect), so rapid edits must settle
+    // without re-render storms.
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       renderComposer();
-      const textarea = screen.getByTestId('chat-composer-input') as HTMLTextAreaElement;
-      const baseline = scrollTopGetter.mock.calls.length;
+      await flushMounts();
 
       for (const value of ['h', 'he', 'hel', 'hell', 'hello']) {
-        fireEvent.change(textarea, { target: { value, selectionStart: value.length } });
+        typeAndSettle(value);
       }
 
       const maxDepth = consoleError.mock.calls.find((args) =>
         args.some((a) => typeof a === 'string' && a.includes('Maximum update depth exceeded')),
       );
       expect(maxDepth).toBeUndefined();
-
-      const perKeystroke = scrollTopGetter.mock.calls.length - baseline;
-      expect(perKeystroke).toBe(0);
+      expect(composerText()).toBe('hello');
     } finally {
       consoleError.mockRestore();
-      if (original) {
-        Object.defineProperty(HTMLTextAreaElement.prototype, 'scrollTop', original);
-      } else {
-        delete (HTMLTextAreaElement.prototype as { scrollTop?: number }).scrollTop;
-      }
     }
   });
 });

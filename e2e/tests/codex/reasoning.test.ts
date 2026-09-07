@@ -5,7 +5,7 @@ import { expect, test } from 'vitest';
 import { createReasoningCodex } from '@/codex-reasoning';
 import { requestJson } from '@/vitest/http';
 import { waitForRunTerminal } from '@/vitest/runs';
-import { createSmokeSuite } from '@/vitest/smoke-suite';
+import { createSmokeSuite } from '@/vitest/suite';
 type AgentsResponse = { agents: Array<{ id: string; models?: Array<{ id: string; reasoningOptions?: Array<{ id: string }> }> }> };
 type ConnectionTestResponse = { ok: boolean; kind: string };
 
