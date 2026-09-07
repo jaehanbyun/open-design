@@ -10,6 +10,7 @@
 // "daemon not reachable" error - the server itself still launches so
 // the client can list its tool schema.
 
+import type { StartRunRequest } from '@open-design/contracts';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -83,6 +84,29 @@ const PROJECT_ARG = {
 } as const;
 
 const TOOL_DEFS = [
+  {
+    name: 'list_agents',
+    description: 'List installed agents, models, and model-specific reasoning capabilities.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { ...READ_ANNOTATIONS, title: 'List agent capabilities' },
+  },
+  {
+    name: 'start_run',
+    description: 'Start or iterate on a design in an existing project. Returns a runId; the daemon validates model and reasoning before generation.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: PROJECT_ARG,
+        agentId: { type: 'string', description: 'Installed agent id from list_agents.' },
+        message: { type: 'string', description: 'Full instruction for this iteration.' },
+        conversationId: { type: 'string' },
+        model: { type: 'string' },
+        reasoning: { type: 'string', description: 'Model-advertised effort id; omit or use default to delegate to CLI config.' },
+      },
+      required: ['agentId', 'message'], additionalProperties: false,
+    },
+    annotations: { ...WRITE_ANNOTATIONS, title: 'Start design run' },
+  },
   {
     name: 'list_projects',
     description: 'List every Open Design project on this daemon.',
@@ -494,6 +518,28 @@ function requireString(v: unknown, name: string): asserts v is string {
 async function handleMcpToolCall(baseUrl: string, name: unknown, args: McpArgs) {
   try {
     switch (name) {
+      case 'list_agents':
+        return ok(await getJson(`${baseUrl}/api/agents`));
+      case 'start_run': {
+        requireString(args.agentId, 'agentId');
+        requireString(args.message, 'message');
+        const { id, resolved, active } = await resolveProjectArg(baseUrl, args.project);
+        const body: StartRunRequest = {
+          projectId: id, agentId: args.agentId as string, message: args.message as string,
+        };
+        for (const key of ['conversationId', 'model', 'reasoning'] as const) {
+          if (args[key] !== undefined) {
+            requireString(args[key], key);
+            body[key] = args[key] as string;
+          }
+        }
+        const url = `${baseUrl}/api/runs`;
+        const response = await fetch(url, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+        if (!response.ok) return errorResult(await formatDaemonError(response, url));
+        return ok(withActiveEcho(await response.json() as JsonObject, active, resolved));
+      }
       case 'list_projects':
         return ok(await getJson<ProjectsPayload>(`${baseUrl}/api/projects`));
       case 'get_active_context': {

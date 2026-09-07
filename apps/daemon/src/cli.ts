@@ -149,7 +149,7 @@ const LIBRARY_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const PROJECT_STRING_FLAGS = new Set([
   'daemon-url', 'name', 'skill', 'design-system', 'plugin', 'metadata-json',
   'pending-prompt', 'project', 'conversation', 'message', 'path', 'as',
-  'agent', 'model', 'snapshot-id', 'inputs', 'grant-caps', 'editor',
+  'agent', 'model', 'reasoning', 'prompt', 'prompt-file', 'snapshot-id', 'inputs', 'grant-caps', 'editor',
 ]);
 const PROJECT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'follow']);
 // `od automation …` mirrors the Automations tab. Same surface, same
@@ -4368,7 +4368,10 @@ async function runRun(args) {
     console.log(`Usage:
   od run start --project <projectId> [--conversation <id>] [--message "<text>"]
                [--plugin <id>] [--inputs <json>] [--grant-caps a,b]
-               [--agent claude|codex|gemini] [--model <id>] [--follow] [--json]
+               [--agent claude|codex|gemini] [--model <id>] [--reasoning <id>]
+               [--prompt-file <path|->] [--follow] [--json]
+  od run redesign --project <projectId> [same options as start]
+               Start another iteration in an existing project.
   od run watch  <runId>                     ND-JSON event stream on stdout.
   od run cancel <runId>                     Request cancellation.
   od run list   [--project <id>]            List recent runs.
@@ -4430,17 +4433,21 @@ Common options:
       await streamRunEvents(base, id);
       return;
     }
+    case 'redesign':
     case 'start': {
       if (!flags.project) {
         console.error('--project <projectId> is required');
         process.exit(2);
       }
-      const body = { projectId: flags.project };
+      const body: Partial<import('@open-design/contracts').StartRunRequest> = { projectId: flags.project };
+      const prompt = await readPromptFromFlags(flags);
+      if (prompt != null) body.message = prompt;
       if (flags.conversation) body.conversationId = flags.conversation;
-      if (flags.message) body.message = flags.message;
+      if (flags.message && prompt == null) body.message = flags.message;
       if (flags.plugin) body.pluginId = flags.plugin;
       if (flags.agent) body.agentId = flags.agent;
       if (flags.model) body.model = flags.model;
+      if (flags.reasoning) body.reasoning = flags.reasoning;
       if (flags.inputs) {
         try { body.pluginInputs = JSON.parse(flags.inputs); } catch (err) {
           console.error(`--inputs must be valid JSON: ${err.message}`);
