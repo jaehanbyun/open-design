@@ -1,3 +1,4 @@
+import { reasoningOptionsForModel, reconcileAgentChoice } from '../runtime/agent-reasoning';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../i18n';
 import { AgentIcon } from './AgentIcon';
@@ -77,8 +78,9 @@ export function AvatarMenu({
     (config.agentId && config.agentModels?.[config.agentId]) || {};
   const currentModelId =
     currentChoice.model ?? currentAgent?.models?.[0]?.id ?? null;
+  const reasoningOptions = reasoningOptionsForModel(currentAgent, currentModelId);
   const currentReasoningId =
-    currentChoice.reasoning ?? currentAgent?.reasoningOptions?.[0]?.id ?? null;
+    reconcileAgentChoice(currentAgent, currentChoice).reasoning ?? reasoningOptions[0]?.id ?? null;
   const currentModelLabel = currentAgent?.models?.find(
     (m) => m.id === currentModelId,
   )?.label;
@@ -208,8 +210,7 @@ export function AvatarMenu({
               {currentAgent &&
               currentAgent.available &&
               ((currentAgent.models && currentAgent.models.length > 0) ||
-                (currentAgent.reasoningOptions &&
-                  currentAgent.reasoningOptions.length > 0)) ? (
+                (reasoningOptions.length > 0)) ? (
                 <div className="avatar-model-section">
                   <div className="avatar-section-label">
                     {t('avatar.modelSection')}
@@ -223,9 +224,9 @@ export function AvatarMenu({
                         className="avatar-select"
                         value={currentModelId ?? ''}
                         onChange={(e) =>
-                          onAgentModelChange(currentAgent.id, {
+                          onAgentModelChange(currentAgent.id, reconcileAgentChoice(currentAgent, currentChoice, {
                             model: e.target.value,
-                          })
+                          }))
                         }
                       >
                         {renderModelOptions(currentAgent.models)}
@@ -245,8 +246,7 @@ export function AvatarMenu({
                       </select>
                     </label>
                   ) : null}
-                  {currentAgent.reasoningOptions &&
-                  currentAgent.reasoningOptions.length > 0 ? (
+                  {reasoningOptions.length > 0 ? (
                     <label className="avatar-select-row">
                       <span className="avatar-select-label">
                         {t('avatar.reasoningLabel')}
@@ -260,7 +260,7 @@ export function AvatarMenu({
                           })
                         }
                       >
-                        {currentAgent.reasoningOptions.map((r) => (
+                        {reasoningOptions.map((r) => (
                           <option key={r.id} value={r.id}>
                             {r.label}
                           </option>

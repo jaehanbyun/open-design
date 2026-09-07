@@ -1,3 +1,4 @@
+import { reasoningOptionsForModel, reconcileAgentChoice } from '../runtime/agent-reasoning';
 // InlineModelSwitcher — top-bar chip exposing CLI/BYOK + model picker.
 //
 // Lives in the entry view's sticky top-bar so users can swap between a
@@ -94,6 +95,9 @@ export function InlineModelSwitcher({
     (config.agentId && config.agentModels?.[config.agentId]) || {};
   const currentModelId =
     currentChoice.model ?? currentAgent?.models?.[0]?.id ?? null;
+  const reasoningOptions = reasoningOptionsForModel(currentAgent, currentModelId);
+  const currentReasoningId = reconcileAgentChoice(currentAgent, currentChoice).reasoning
+    ?? reasoningOptions[0]?.id ?? 'default';
   const currentModelLabel =
     currentAgent?.models?.find((m) => m.id === currentModelId)?.label ?? null;
 
@@ -281,9 +285,9 @@ export function InlineModelSwitcher({
                     data-testid="inline-model-switcher-agent-model"
                     value={currentModelId ?? ''}
                     onChange={(e) =>
-                      onAgentModelChange?.(currentAgent.id, {
+                      onAgentModelChange?.(currentAgent.id, reconcileAgentChoice(currentAgent, currentChoice, {
                         model: e.target.value,
-                      })
+                      }))
                     }
                   >
                     {renderModelOptions(currentAgent.models)}
@@ -295,6 +299,23 @@ export function InlineModelSwitcher({
                     ) : null}
                   </select>
                 </div>
+              ) : null}
+              {currentAgent && reasoningOptions.length > 0 ? (
+                <label className="inline-switcher__row">
+                  <span className="inline-switcher__label">{t('avatar.reasoningLabel')}</span>
+                  <select
+                    className="inline-switcher__select"
+                    data-testid="inline-model-switcher-reasoning"
+                    value={currentReasoningId}
+                    onChange={(e) => onAgentModelChange(currentAgent.id, { reasoning: e.target.value })}
+                  >
+                    {reasoningOptions.map((option) => (
+                      <option key={option.id} value={option.id} title={option.description}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               ) : null}
             </>
           ) : (

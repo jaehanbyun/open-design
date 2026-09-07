@@ -1,3 +1,4 @@
+import { reasoningOptionsForModel, reconcileAgentChoice, reconcileAgentPreferences } from '../runtime/agent-reasoning';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, Dispatch, SetStateAction } from 'react';
 import { validateBaseUrl } from '@open-design/contracts/api/connectionTest';
@@ -805,6 +806,9 @@ export function SettingsDialog({
   const { t, locale, setLocale } = useI18n();
   const analytics = useAnalytics();
   const [cfg, setCfg] = useState<AppConfig>(initial);
+  useEffect(() => {
+    setCfg((current) => reconcileAgentPreferences(current, agents));
+  }, [agents]);
   const [pendingMediaProviderEditIds, setPendingMediaProviderEditIds] = useState<
     ReadonlySet<string>
   >(() => new Set());
@@ -1452,6 +1456,8 @@ export function SettingsDialog({
         return t('settings.testNotFoundModel', { model: testedModel });
       case 'invalid_model_id':
         return t('settings.testInvalidModelId', { model: testedModel });
+      case 'invalid_reasoning':
+        return result.detail || t('settings.testUnknown');
       case 'invalid_base_url':
         return t('settings.testInvalidBaseUrl');
       case 'rate_limited':
@@ -2546,9 +2552,9 @@ export function SettingsDialog({
                 if (!selected) return null;
                 const hasModels =
                   Array.isArray(selected.models) && selected.models.length > 0;
-                const hasReasoning =
-                  Array.isArray(selected.reasoningOptions) &&
-                  selected.reasoningOptions.length > 0;
+                const selectedChoice = cfg.agentModels?.[selected.id] ?? {};
+                const reasoningOptions = reasoningOptionsForModel(selected, selectedChoice.model ?? selected.models?.[0]?.id);
+                const hasReasoning = reasoningOptions.length > 0;
                 if (!hasModels && !hasReasoning) return null;
                 const choice = cfg.agentModels?.[selected.id] ?? {};
                 const setChoice = (
@@ -2560,7 +2566,7 @@ export function SettingsDialog({
                       ...c,
                       agentModels: {
                         ...(c.agentModels ?? {}),
-                        [selected.id]: { ...prev, ...next },
+                        [selected.id]: reconcileAgentChoice(selected, prev, next),
                       },
                     };
                   });
@@ -2568,8 +2574,8 @@ export function SettingsDialog({
                 const modelValue =
                   choice.model ?? selected.models?.[0]?.id ?? '';
                 const reasoningValue =
-                  choice.reasoning ??
-                  selected.reasoningOptions?.[0]?.id ?? '';
+                  reconcileAgentChoice(selected, choice).reasoning ??
+                  reasoningOptions[0]?.id ?? '';
                 const customActive =
                   hasModels &&
                   shouldShowCustomModelInput(
@@ -2671,7 +2677,7 @@ export function SettingsDialog({
                               setChoice({ reasoning: e.target.value })
                             }
                           >
-                            {selected.reasoningOptions!.map((r) => (
+                            {reasoningOptions.map((r) => (
                               <option key={r.id} value={r.id}>
                                 {r.label}
                               </option>

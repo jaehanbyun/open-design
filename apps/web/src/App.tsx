@@ -1,3 +1,4 @@
+import { reconcileAgentChoice, reconcileAgentPreferences } from './runtime/agent-reasoning';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { useAnalytics } from './analytics/provider';
@@ -730,10 +731,18 @@ export function App() {
     [config],
   );
 
+  useEffect(() => {
+    const next = reconcileAgentPreferences(config, agents);
+    if (next === config) return;
+    saveConfig(next);
+    void syncConfigToDaemon(next);
+    setConfig(next);
+  }, [config, agents]);
+
   const handleAgentModelChange = useCallback(
     (agentId: string, choice: { model?: string; reasoning?: string }) => {
       const prev = config.agentModels?.[agentId] ?? {};
-      const merged = { ...prev, ...choice };
+      const merged = reconcileAgentChoice(agents.find((a) => a.id === agentId), prev, choice);
       const nextAgentModels = {
         ...(config.agentModels ?? {}),
         [agentId]: merged,
@@ -743,7 +752,7 @@ export function App() {
       void syncConfigToDaemon(next);
       setConfig(next);
     },
-    [config],
+    [config, agents],
   );
 
   // BYOK protocol switch — also flips `mode` to 'api' so the user does
