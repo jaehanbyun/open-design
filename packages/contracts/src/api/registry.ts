@@ -1,6 +1,16 @@
+export interface AgentReasoningOption {
+  id: string;
+  label: string;
+  description?: string;
+}
+
 export interface AgentModelOption {
   id: string;
   label: string;
+  /** Undefined means the catalogue did not supply reasoning capabilities. */
+  reasoningOptions?: AgentReasoningOption[];
+  /** Advertised default; Default in the picker still delegates to CLI config. */
+  defaultReasoning?: string;
 }
 
 export interface AgentInfo {
@@ -15,7 +25,7 @@ export interface AgentInfo {
   models?: AgentModelOption[];
   /** Whether models came from the installed CLI or Open Design's static fallback. */
   modelsSource?: 'live' | 'fallback';
-  reasoningOptions?: AgentModelOption[];
+  reasoningOptions?: AgentReasoningOption[];
   /** HTTPS URL to install or download the CLI (vendor docs, GitHub README, npm). */
   installUrl?: string;
   /** Optional HTTPS URL for configuration / auth / usage docs. */

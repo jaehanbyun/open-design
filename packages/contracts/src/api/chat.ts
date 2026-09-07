@@ -49,6 +49,19 @@ export interface ChatRequest {
   analyticsHints?: ChatAnalyticsHints;
 }
 
+/** POST /api/runs; UI, CLI and MCP share the same execution settings. */
+export interface StartRunRequest extends ChatRequest {
+  projectId: string;
+  pluginId?: string;
+  pluginInputs?: Record<string, unknown>;
+  grantCaps?: string[];
+  appliedPluginSnapshotId?: string;
+}
+
+export interface StartRunResponse {
+  runId: string;
+}
+
 export type ChatAnalyticsEntryFrom =
   | 'new_project'
   | 'chat_composer'
